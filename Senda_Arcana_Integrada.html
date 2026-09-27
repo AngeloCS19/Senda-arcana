@@ -1,0 +1,1068 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Senda Arcana</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700&family=EB+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+
+<!-- =========================================================================
+     SENDA ARCANA — Integración: interfaz y tablero de "Senda Arcana" +
+     banco de preguntas y lógica de reto/avance de "Carrera Algebraica".
+     El profesor proyecta esta pantalla. El dado sigue siendo físico; al
+     mover una ficha, si la casilla destino es de Nivel 1, Nivel 2 o
+     Difícil, aparece automáticamente una pregunta de álgebra: respuesta
+     correcta → el equipo avanza a esa casilla; incorrecta → se queda
+     donde estaba. Un solo archivo HTML/CSS/JS, comentado por secciones.
+     ========================================================================= -->
+
+<style>
+/* =========================================================================
+   1. TOKENS DE DISEÑO
+   ========================================================================= */
+:root{
+  color-scheme: dark;
+  --ink:        #2a1d12;
+  --parchment:  #ecdcb6;
+  --parchment-2:#dcc696;
+  --wood:       #3b2a1d;
+  --wood-2:     #2a1d13;
+  --gold:       #d3a13b;
+  --gold-light: #f0cd7e;
+  --gold-dim:   #8a6a2e;
+
+  --l1:      #3f8a52; --l1-bg:  #234631; --l1-ink: #d9f2e0;
+  --l2:      #c9862c; --l2-bg:  #4a3419; --l2-ink: #ffe8c4;
+  --hard:    #b4392f; --hard-bg:#4a201c; --hard-ink:#ffdcd6;
+
+  --trampa:      #8a4a30; --trampa-bg:#3c2417;
+  --retroceder:  #5a6b8c; --retroceder-bg:#232a3c;
+  --perderturno: #5a4a9c; --perderturno-bg:#231d3c;
+  --portal:      #9c4a92; --portal-bg:#341f32;
+  --avanzar:     #2f8a80; --avanzar-bg:#1a3733;
+
+  --card-gold:   #e0b83f; --card-bg:#3c2f14;
+
+  --panel-bg: #211609;
+  --panel-edge: #4a3419;
+  --text-warm: #f2e3c2;
+  --text-dim:  #cbb489;
+
+  --font-display: "Cinzel", "Times New Roman", serif;
+  --font-deco: "Cinzel Decorative", "Cinzel", serif;
+  --font-body: "EB Garamond", "Iowan Old Style", Georgia, serif;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:
+    radial-gradient(ellipse at 20% 0%, #3a2a18 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, #22140a 0%, transparent 60%),
+    linear-gradient(160deg, #1b1109 0%, #241708 45%, #1b1109 100%);
+  color: var(--text-warm);
+  font-family: var(--font-body);
+  min-height: 100%;
+}
+
+.app{
+  display:flex;
+  flex-direction:column;
+  gap: 14px;
+  padding-inline: 18px;
+  padding-block: 14px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* =========================================================================
+   2. ENCABEZADO
+   ========================================================================= */
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 22px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2c1d0f, #1c1108);
+  border: 2px solid var(--gold-dim);
+  box-shadow: inset 0 0 0 1px #00000055, 0 8px 20px #00000055;
+}
+.title-block{display:flex; align-items:center; gap:14px;}
+.title-emblem{
+  width:44px; height:44px; flex:0 0 auto;
+  filter: drop-shadow(0 2px 2px #00000080);
+}
+.title-text h1{
+  font-family: var(--font-deco);
+  font-size: clamp(20px, 2.6vw, 34px);
+  margin:0;
+  color: var(--gold-light);
+  letter-spacing: .03em;
+  text-wrap: balance;
+}
+.title-text p{
+  margin: 2px 0 0;
+  font-size: clamp(12px, 1.1vw, 15px);
+  color: var(--text-dim);
+  letter-spacing: .04em;
+}
+.header-actions{display:flex; gap:8px; flex-wrap:wrap;}
+
+button.rune-btn{
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: .03em;
+  font-size: 14px;
+  color: var(--text-warm);
+  background: linear-gradient(180deg, #4a3419, #2c1d0f);
+  border: 1.5px solid var(--gold-dim);
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+button.rune-btn:hover{ background: linear-gradient(180deg, #5c4020, #382614); box-shadow: 0 0 0 1px var(--gold-light) inset; }
+button.rune-btn:active{ transform: translateY(1px) scale(.98); }
+button.rune-btn:focus-visible{ outline: 2px solid var(--gold-light); outline-offset: 2px; }
+button.rune-btn.primary{ background: linear-gradient(180deg, var(--gold), var(--gold-dim)); color:#241708; border-color: var(--gold-light); }
+button.rune-btn.primary:hover{ background: linear-gradient(180deg, var(--gold-light), var(--gold)); }
+button.rune-btn.small{ padding: 5px 10px; font-size: 12.5px; }
+button.rune-btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+/* =========================================================================
+   3. DISTRIBUCIÓN GENERAL
+   ========================================================================= */
+.layout{
+  display:grid;
+  grid-template-columns: minmax(0, 2.15fr) minmax(300px, 1fr);
+  gap: 16px;
+  align-items:start;
+}
+@media (max-width: 880px){
+  .layout{ grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   4. TABLERO
+   ========================================================================= */
+.board-frame{
+  position:relative;
+  border-radius: 16px;
+  padding: 14px;
+  background:
+    repeating-linear-gradient(45deg, #00000012 0 2px, transparent 2px 6px),
+    linear-gradient(180deg, #3b2a1a, #241706);
+  border: 3px solid var(--gold-dim);
+  box-shadow: inset 0 0 0 2px #00000066, 0 10px 26px #00000066;
+}
+.board-corner{
+  position:absolute; width:34px; height:34px; opacity:.85;
+  filter: drop-shadow(0 1px 1px #0008);
+}
+.board-corner.tl{top:8px; left:8px;}
+.board-corner.tr{top:8px; right:8px; transform:scaleX(-1);}
+.board-corner.bl{bottom:8px; left:8px; transform:scaleY(-1);}
+.board-corner.br{bottom:8px; right:8px; transform:scale(-1,-1);}
+
+.board-surface{
+  position:relative;
+  border-radius: 10px;
+  background:
+    radial-gradient(ellipse at 30% 15%, #f4e5bd 0%, transparent 55%),
+    radial-gradient(ellipse at 75% 85%, #e7d19f 0%, transparent 60%),
+    linear-gradient(160deg, var(--parchment) 0%, var(--parchment-2) 100%);
+  aspect-ratio: 1280 / 1000;
+  overflow:hidden;
+  box-shadow: inset 0 0 40px #00000030;
+}
+.board-surface svg{ display:block; width:100%; height:100%; }
+
+.token{
+  position:absolute;
+  width: 6.2%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -135%);
+  border-radius: 50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family: var(--font-display);
+  font-weight:700;
+  color:#fff;
+  font-size: clamp(10px, 1.3vw, 16px);
+  border: 2px solid #fff8;
+  box-shadow: 0 3px 6px #00000070, inset 0 -3px 4px #00000040, inset 0 2px 3px #ffffff50;
+  transition: left .5s cubic-bezier(.4,.1,.2,1), top .5s cubic-bezier(.4,.1,.2,1);
+  pointer-events:none;
+  z-index: 5;
+}
+.token.skip-flag::after{
+  content:"⏳";
+  position:absolute; top:-9px; right:-9px;
+  font-size: 13px;
+  filter: drop-shadow(0 1px 1px #000);
+}
+
+/* =========================================================================
+   5. CELDAS SVG
+   ========================================================================= */
+.cell{ cursor:pointer; }
+.cell .cell-shape{ transition: filter .15s ease, transform .15s ease; transform-origin: center; transform-box: fill-box; }
+.cell:hover .cell-shape{ filter: brightness(1.12); transform: scale(1.05); }
+.cell.active .cell-shape{ filter: brightness(1.2); }
+.cell .cell-ring{ opacity:0; transition: opacity .2s ease; }
+.cell.active .cell-ring{ opacity:1; }
+.cell text.cell-num{
+  font-family: var(--font-display); font-weight:700;
+  fill:#00000070; font-size: 20px;
+}
+.cell .cell-icon{ pointer-events:none; }
+
+/* =========================================================================
+   6. PANEL LATERAL
+   ========================================================================= */
+.panel{
+  display:flex; flex-direction:column; gap:12px;
+  position: sticky; top: 10px;
+}
+.card-box{
+  background: var(--panel-bg);
+  border: 2px solid var(--panel-edge);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: inset 0 0 0 1px #00000055, 0 6px 16px #00000040;
+}
+.card-box h2{
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--gold-light);
+  margin: 0 0 10px;
+  display:flex; align-items:center; gap:8px;
+}
+.card-box h2 .rule{ flex:1; height:1px; background: linear-gradient(90deg, var(--gold-dim), transparent); }
+
+.teams-list{ display:flex; flex-direction:column; gap:7px; }
+.team-row{
+  display:flex; align-items:center; gap:8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  background: #ffffff08;
+  cursor:pointer;
+}
+.team-row.active{
+  border-color: var(--gold-light);
+  background: #d3a13b1a;
+  box-shadow: 0 0 0 1px var(--gold-dim) inset;
+}
+.team-dot{
+  width:20px; height:20px; border-radius:50%;
+  flex: 0 0 auto;
+  border: 2px solid #ffffff60;
+  box-shadow: inset 0 -2px 3px #00000040;
+}
+.team-row input[type=text]{
+  flex:1; min-width:0;
+  background:transparent; border:none; color:var(--text-warm);
+  font-family: var(--font-body); font-size:15px; font-weight:600;
+  padding: 3px 2px; border-bottom: 1px dashed transparent;
+}
+.team-row input[type=text]:hover, .team-row input[type=text]:focus{ border-bottom-color: var(--gold-dim); outline:none; }
+.team-pos{ font-size:12px; color:var(--text-dim); flex:0 0 auto; font-variant-numeric: tabular-nums; }
+.team-skip-btn{
+  flex:0 0 auto; font-size:15px; background:none; border:none; cursor:pointer;
+  opacity:.45; padding:2px 4px; border-radius:5px;
+}
+.team-skip-btn.on{ opacity:1; background:#00000030; }
+.team-remove-btn{
+  flex:0 0 auto; font-size:13px; background:none; border:none; cursor:pointer;
+  color: var(--text-dim); opacity:.5; padding: 2px 5px;
+}
+.team-remove-btn:hover{ opacity:1; color: var(--hard); }
+.teams-footer{ display:flex; gap:8px; margin-top:10px; }
+
+.turn-banner{
+  display:flex; align-items:center; gap:10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #d3a13b22, transparent);
+  border-left: 3px solid var(--gold);
+}
+.turn-banner .dot{width:16px;height:16px;border-radius:50%; border:2px solid #fff8; flex:0 0 auto;}
+.turn-banner b{ font-family: var(--font-display); color: var(--gold-light); font-size:15px; }
+
+.move-dir-toggle{ display:flex; gap:6px; margin-bottom:10px; }
+.move-dir-toggle button{ flex:1; }
+.move-dir-toggle button.active{ background: linear-gradient(180deg, var(--gold), var(--gold-dim)); color:#241708; border-color:var(--gold-light); }
+.dice-grid{ display:grid; grid-template-columns: repeat(6,1fr); gap:6px; }
+.dice-grid button{
+  aspect-ratio:1; padding:0; font-size:17px; font-family: var(--font-display); font-weight:700;
+}
+.move-hint{ font-size:12.5px; color:var(--text-dim); margin-top:8px; line-height:1.4; }
+
+.active-empty{ color: var(--text-dim); font-size:14px; font-style:italic; }
+.active-cell-head{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.active-cell-icon{
+  width:42px; height:42px; border-radius:10px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  border: 2px solid #ffffff30;
+}
+.active-cell-icon svg{ width:26px; height:26px; }
+.active-cell-title{ font-family: var(--font-display); font-size:16px; color: var(--text-warm); line-height:1.2; }
+.active-cell-tag{
+  display:inline-block; margin-top:2px;
+  font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  padding: 2px 7px; border-radius: 5px; font-weight:700;
+}
+.active-cell-desc{ font-size: 14.5px; line-height:1.5; color: var(--text-dim); }
+
+.legend-grid{ display:grid; grid-template-columns: 1fr 1fr; gap:7px 10px; }
+.legend-item{ display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--text-dim); }
+.legend-swatch{
+  width:20px; height:20px; flex:0 0 auto; border-radius:5px;
+  display:flex; align-items:center; justify-content:center;
+  border: 1.5px solid #ffffff25;
+}
+.legend-swatch svg{ width:13px; height:13px; }
+
+/* =========================================================================
+   7. TOAST DE CASILLA DE TARJETA
+   ========================================================================= */
+.card-toast{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+  z-index: 20;
+  opacity:0;
+}
+.card-toast.show{ animation: toast-pop 2.4s ease forwards; }
+.card-toast-inner{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding: 18px 30px;
+  border-radius: 14px;
+  background: radial-gradient(ellipse at center, #3c2f14ee, #1a1206ee);
+  border: 2px solid var(--card-gold);
+  box-shadow: 0 0 40px 10px #e0b83f55, 0 10px 30px #000a;
+}
+.card-toast-inner svg{ width:56px; height:56px; }
+.card-toast-inner span{
+  font-family: var(--font-deco);
+  color: var(--gold-light);
+  font-size: 20px;
+  letter-spacing:.04em;
+  text-shadow: 0 0 10px #f0cd7ea0;
+}
+@keyframes toast-pop{
+  0%{ opacity:0; transform: scale(.75); }
+  12%{ opacity:1; transform: scale(1.04); }
+  20%{ transform: scale(1); }
+  80%{ opacity:1; }
+  100%{ opacity:0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .token{ transition:none; }
+  .card-toast.show{ animation: none; opacity:1; }
+}
+
+/* =========================================================================
+   8. MODALES — reto de álgebra y ganador (integrados desde "Carrera
+   Algebraica" con la estética de pergamino/oro de Senda Arcana)
+   ========================================================================= */
+.overlay{
+  position:fixed; inset:0; background:#0d0703c4; backdrop-filter: blur(4px);
+  display:flex; align-items:center; justify-content:center; padding:20px; z-index:30;
+}
+.overlay[hidden]{ display:none; }
+.modal{
+  background: linear-gradient(165deg, #3b2a1d, #1c1108);
+  border:2px solid var(--gold-dim); border-radius:20px; padding:32px 28px; max-width:560px; width:100%;
+  box-shadow: 0 30px 60px #00000070, inset 0 0 0 1px #00000055;
+}
+.modal .kicker{
+  font-family: var(--font-display); font-size:13px; text-transform:uppercase;
+  letter-spacing:.08em; font-weight:700;
+}
+.modal .kicker.n1{ color:var(--l1); }
+.modal .kicker.n2{ color:var(--l2); }
+.modal .kicker.hard{ color:var(--hard); }
+.modal .expr{
+  font-family:'Cinzel', serif; font-size: clamp(26px,5.4vw,38px); font-weight:700; margin:14px 0 6px;
+  text-wrap:balance; color: var(--text-warm);
+}
+.modal .answer-label{ font-size:13px; color:var(--text-dim); margin-bottom:4px; }
+.modal .answer{
+  font-family:'Cinzel', serif; font-size: clamp(22px,4.6vw,30px); font-weight:700; color:var(--gold-light);
+  margin: 4px 0 18px;
+}
+.modal .row{ display:flex; gap:12px; flex-wrap:wrap; margin-top:18px; }
+.modal .row .rune-btn{ flex:1; min-width:180px; }
+.rune-btn.ok{ background: linear-gradient(180deg, var(--l1), #1c3b26); border-color:#5cba78; color:#0e1f13; }
+.rune-btn.ok:hover{ background: linear-gradient(180deg, #4ca363, var(--l1)); }
+.rune-btn.no{ background: linear-gradient(180deg, var(--hard), #3c1815); border-color:#e06a5f; color:#2a0906; }
+.rune-btn.no:hover{ background: linear-gradient(180deg, #c94c40, var(--hard)); }
+
+.winner-modal{ text-align:center; }
+.winner-modal .confetti-row{ font-size:28px; margin-bottom:6px; }
+.winner-modal .expr{ font-size: clamp(28px,6vw,40px); }
+
+/* =========================================================================
+   9. RESPONSIVO
+   ========================================================================= */
+@media (max-width: 560px){
+  .header{ padding: 8px 12px; }
+  .dice-grid{ grid-template-columns: repeat(3,1fr); }
+  .legend-grid{ grid-template-columns: 1fr; }
+}
+</style>
+
+<!-- =========================================================================
+     10. MARCADO
+     ========================================================================= -->
+<div class="app">
+
+  <header class="header">
+    <div class="title-block">
+      <svg class="title-emblem" viewBox="0 0 24 24" fill="none"><use href="#icon-castle"/></svg>
+      <div class="title-text">
+        <h1>Senda Arcana</h1>
+        <p>Tablero de misiones — multiplicación de monomio × polinomio</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="rune-btn small" id="btn-reset" title="Vuelve todas las fichas a la casilla inicial">↺ Reiniciar partida</button>
+      <button class="rune-btn small" id="btn-fullscreen">⛶ Pantalla completa</button>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <!-- ---- TABLERO ---- -->
+    <div class="board-frame">
+      <svg class="board-corner tl" viewBox="0 0 24 24" fill="none"><use href="#icon-flourish"/></svg>
+      <svg class="board-corner tr" viewBox="0 0 24 24" fill="none"><use href="#icon-flourish"/></svg>
+      <svg class="board-corner bl" viewBox="0 0 24 24" fill="none"><use href="#icon-flourish"/></svg>
+      <svg class="board-corner br" viewBox="0 0 24 24" fill="none"><use href="#icon-flourish"/></svg>
+
+      <div class="board-surface" id="board-surface">
+        <div class="card-toast" id="card-toast">
+          <div class="card-toast-inner">
+            <svg viewBox="0 0 24 24" fill="none"><use href="#icon-chest-open"/></svg>
+            <span>¡Roba una carta!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---- PANEL LATERAL ---- -->
+    <aside class="panel">
+
+      <div class="card-box">
+        <h2>Turno actual <span class="rule"></span></h2>
+        <div class="turn-banner">
+          <div class="dot" id="turn-dot"></div>
+          <b id="turn-name">—</b>
+        </div>
+
+        <div class="teams-list" id="teams-list"><!-- generado en JS --></div>
+
+        <div class="teams-footer">
+          <button class="rune-btn small" id="btn-add-team">+ Añadir equipo</button>
+          <button class="rune-btn small primary" id="btn-next-turn">Siguiente turno →</button>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <h2>Mover ficha del equipo <span class="rule"></span></h2>
+        <div class="move-dir-toggle">
+          <button class="rune-btn small active" id="btn-dir-avanzar" data-dir="1">➡ Avanzar</button>
+          <button class="rune-btn small" id="btn-dir-retroceder" data-dir="-1">⬅ Retroceder</button>
+        </div>
+        <div class="dice-grid" id="dice-grid"><!-- botones 1-6 generados en JS --></div>
+        <p class="move-hint">Mueve la ficha del equipo activo según el dado físico. Si cae en una casilla de <b>Nivel 1</b>, <b>Nivel 2</b> o <b>Difícil</b>, aparecerá una pregunta: respuesta correcta → avanza a esa casilla; incorrecta → se queda donde estaba. Haz clic en cualquier casilla para teletransportar la ficha ahí directamente (útil para portales), sin pregunta.</p>
+      </div>
+
+      <div class="card-box">
+        <h2>Casilla activa <span class="rule"></span></h2>
+        <div id="active-cell-body"><p class="active-empty">Toca una casilla del tablero para ver su tipo, nivel y descripción.</p></div>
+      </div>
+
+      <div class="card-box">
+        <h2>Leyenda <span class="rule"></span></h2>
+        <div class="legend-grid" id="legend-grid"><!-- generado en JS --></div>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<!-- ══ MODAL: RETO DE ÁLGEBRA ══ -->
+<div class="overlay" id="overlay-question" hidden>
+  <div class="modal">
+    <div class="kicker" id="q-kicker">Nivel 1</div>
+    <div class="expr" id="q-expr">2x(x + 3)</div>
+    <div id="q-answer-block" hidden>
+      <div class="answer-label">Respuesta correcta:</div>
+      <div class="answer" id="q-answer">2x² + 6x</div>
+    </div>
+    <div class="row" id="q-row-reveal">
+      <button class="rune-btn primary" id="btn-reveal" style="flex:1">Revelar respuesta</button>
+    </div>
+    <div class="row" id="q-row-judge" hidden>
+      <button class="rune-btn ok" id="btn-correct">✅ Respondió bien — avanza</button>
+      <button class="rune-btn no" id="btn-wrong">❌ No — se queda</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL: GANADOR ══ -->
+<div class="overlay" id="overlay-winner" hidden>
+  <div class="modal winner-modal">
+    <div class="confetti-row">🐉 🏰 🐉 🏰 🐉</div>
+    <div class="kicker n1">¡Fin de la travesía!</div>
+    <div class="expr" id="winner-name">Equipo Dragón</div>
+    <p class="active-cell-desc">¡Llegó primero a la Guarida del Dragón!</p>
+    <div class="row">
+      <button class="rune-btn primary" id="btn-close-winner" style="flex:1">Ver tablero final</button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================================
+     11. ÍCONOS SVG REUTILIZABLES (defs)
+     ========================================================================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <g id="icon-star"><path d="M12 2.5l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6-4.5-4.2 6.1-.7z" fill="currentColor"/></g>
+  <g id="icon-flame"><path d="M12 2c1 3-3 4-3 7.5A3 3 0 0012 13a3 3 0 003-3.5c1.2 1 2 2.8 2 4.5a5 5 0 01-10 0c0-3.5 2.5-4 3-8 .3 1 .8 1.6 1.4 2.1C11.9 6 11.4 4 12 2z" fill="currentColor"/></g>
+  <g id="icon-swords"><path d="M4 4l7 7M4 4l1.6-.3L6 5.5 4 4zm7 7l7-7m0 0l.3 1.6L20.5 6 18 4zM4 20l6-6M20 20l-6-6M6 14l-2 6 2-1 1-2-1-3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>
+  <g id="icon-chest"><rect x="3" y="10" width="18" height="10" rx="1.5" fill="currentColor"/><path d="M3 10a9 5 0 0118 0" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="10.5" y="12.5" width="3" height="3.4" rx=".6" fill="#1a1206"/></g>
+  <g id="icon-chest-open"><rect x="3" y="12" width="18" height="9" rx="1.5" fill="currentColor"/><path d="M3 12l1-4h16l1 4" fill="currentColor"/><path d="M3.5 12c2-5 6-6 8.5-6s6.5 1 8.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v5M9 4.5l1.4 3.6M15 4.5l-1.4 3.6" stroke="#f0cd7e" stroke-width="1.4" stroke-linecap="round"/></g>
+  <g id="icon-hourglass"><path d="M6 3h12M6 21h12M7 3c0 5 4 7 5 8-1 1-5 3-5 8M17 3c0 5-4 7-5 8 1 1 5 3 5 8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>
+  <g id="icon-portal"><path d="M12 3c5 0 8 2.5 8 5.5S16 15 12 15 4 11.5 4 8.5 7 3 12 3z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 6.2c2.6 0 4.2 1.1 4.2 2.3S14.6 10.8 12 10.8 7.8 9.7 7.8 8.5 9.4 6.2 12 6.2z" fill="currentColor"/><path d="M12 15c-2 4-2 5 0 6M12 15c2 4 2 5 0 6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></g>
+  <g id="icon-spikes"><path d="M2 20l3.5-9L9 20zM8.5 20L12 9l3.5 11zM15 20l3.5-9L22 20z" fill="currentColor"/></g>
+  <g id="icon-arrow-right"><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>
+  <g id="icon-arrow-left"><path d="M20 12H5M11 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>
+  <g id="icon-castle"><path d="M4 21V11H2l3-4h1V5h2v2h1V5h2v2h1V5h2v2h1v2h1l3 4h-2v10z" fill="currentColor"/><rect x="9" y="14" width="6" height="7" fill="#1a1206"/></g>
+  <g id="icon-dragon"><path d="M3 15c2-4 5-6 7-6 1-3 4-6 8-6-1 2-1 3.5 0 5-2 0-4 1-5 3 2 0 3 1 3 2-2-.5-4 0-5 1.5-1.5 0-2.5.5-3 1.5-2-.3-3.5-.5-5-1z" fill="currentColor"/><circle cx="15.5" cy="7" r="1" fill="#1a1206"/></g>
+  <g id="icon-flourish"><path d="M2 22C2 12 12 2 22 2" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="4.5" cy="19.5" r="1.6" fill="currentColor"/></g>
+</defs>
+</svg>
+
+<script>
+/* =========================================================================
+   12. DATOS DEL TABLERO — 22 casillas en recorrido serpenteante (4 filas
+   x 6 columnas). Editar aquí cambia tipo, color e ícono de cada casilla.
+   ========================================================================= */
+
+const PATH_COORDS = [
+  [100,130],[316,130],[532,130],[748,130],[964,130],[1180,130],
+  [1180,385],[964,385],[748,385],[532,385],[316,385],[100,385],
+  [100,640],[316,640],[532,640],[748,640],[964,640],[1180,640],
+  [1180,890],[964,890],[748,890],[532,890]
+];
+
+const KINDS = {
+  start:  { label:"Castillo inicial", icon:"icon-castle", color:"var(--gold)", bg:"var(--wood)",
+            desc:"Punto de partida de todos los equipos. ¡Que comience la travesía!" },
+  finish: { label:"Guarida del Dragón", icon:"icon-dragon", color:"var(--gold-light)", bg:"var(--wood-2)",
+            desc:"Meta final. El primer equipo en llegar reclama la victoria." },
+  n1:     { label:"Nivel 1 · Fácil", tag:"NIVEL 1", icon:"icon-star", color:"var(--l1)", bg:"var(--l1-bg)", ink:"var(--l1-ink)",
+            desc:"Pregunta de nivel 1: multiplicación sencilla de un monomio por un binomio. Respuesta correcta → avanza; incorrecta → se queda." },
+  n2:     { label:"Nivel 2 · Intermedio", tag:"NIVEL 2", icon:"icon-flame", color:"var(--l2)", bg:"var(--l2-bg)", ink:"var(--l2-ink)",
+            desc:"Pregunta de nivel 2: monomio por un polinomio más largo. Respuesta correcta → avanza; incorrecta → se queda." },
+  hard:   { label:"Casilla difícil", tag:"DIFÍCIL", icon:"icon-swords", color:"var(--hard)", bg:"var(--hard-bg)", ink:"var(--hard-ink)",
+            desc:"Pregunta difícil: signos, exponentes y varios términos. Respuesta correcta → avanza; incorrecta → se queda." },
+  card:   { label:"Cofre del tesoro", tag:"CARTA", icon:"icon-chest", color:"var(--card-gold)", bg:"var(--card-bg)",
+            desc:"¡Roba una carta! El equipo toma una carta física de eventos y sigue sus instrucciones." },
+  trampa:      { label:"Trampa arcana", tag:"EVENTO", icon:"icon-spikes", color:"var(--trampa)", bg:"var(--trampa-bg)",
+                 desc:"Una losa oculta se activa bajo los pies del equipo. Sugerencia narrativa: retrocede algunas casillas." },
+  retroceder:  { label:"Viento en contra", tag:"EVENTO", icon:"icon-arrow-left", color:"var(--retroceder)", bg:"var(--retroceder-bg)",
+                 desc:"Una ráfaga mágica empuja al equipo hacia atrás por el camino recorrido." },
+  perderturno: { label:"Ilusión hechizante", tag:"EVENTO", icon:"icon-hourglass", color:"var(--perderturno)", bg:"var(--perderturno-bg)",
+                 desc:"El equipo queda atrapado en una ilusión y pierde su próximo turno." },
+  portal:      { label:"Portal arcano", tag:"EVENTO", icon:"icon-portal", color:"var(--portal)", bg:"var(--portal-bg)",
+                 desc:"Un portal transporta al equipo a otro punto del reino. El profesor decide el destino." },
+  avanzar:     { label:"Atajo mágico", tag:"EVENTO", icon:"icon-arrow-right", color:"var(--avanzar)", bg:"var(--avanzar-bg)",
+                 desc:"El equipo descubre un camino secreto y avanza varias casillas de un salto." },
+};
+
+const CELLS = [
+  { id:1,  kind:"start" },
+  { id:2,  kind:"n1" },
+  { id:3,  kind:"trampa" },
+  { id:4,  kind:"n1" },
+  { id:5,  kind:"card" },
+  { id:6,  kind:"n2" },
+  { id:7,  kind:"retroceder" },
+  { id:8,  kind:"n1" },
+  { id:9,  kind:"hard" },
+  { id:10, kind:"card" },
+  { id:11, kind:"perderturno" },
+  { id:12, kind:"n2" },
+  { id:13, kind:"n1" },
+  { id:14, kind:"portal" },
+  { id:15, kind:"hard" },
+  { id:16, kind:"card" },
+  { id:17, kind:"n2" },
+  { id:18, kind:"avanzar" },
+  { id:19, kind:"n1" },
+  { id:20, kind:"hard" },
+  { id:21, kind:"card" },
+  { id:22, kind:"finish" },
+].map((c, i) => ({ ...c, x: PATH_COORDS[i][0], y: PATH_COORDS[i][1] }));
+
+const LAST_INDEX = CELLS.length - 1;
+
+const TEAM_COLORS = ["#b4392f","#2f6f9c","#3f8a52","#9c4a92","#c9862c","#5a6b8c"];
+const TEAM_NAMES  = ["Equipo Dragón","Equipo Fénix","Equipo Grifo","Equipo Elfo","Equipo Trol","Equipo Hada"];
+
+/* =========================================================================
+   13. BANCO DE PREGUNTAS — tomado de "Carrera Algebraica", indexado por el
+   mismo identificador de nivel que ya usan las casillas de Senda Arcana
+   (n1 = fácil, n2 = intermedio, hard = difícil), para que cada casilla
+   dispare exactamente la dificultad que anuncia su color/ícono.
+   ========================================================================= */
+const QUESTION_BANK = {
+  n1: [
+    {q:"2x(x + 3)", a:"2x² + 6x"},
+    {q:"3a(a + 4)", a:"3a² + 12a"},
+    {q:"4y(y + 2)", a:"4y² + 8y"},
+    {q:"5m(m + 1)", a:"5m² + 5m"},
+    {q:"2x(3x + 2)", a:"6x² + 4x"},
+    {q:"3b(2b + 5)", a:"6b² + 15b"},
+    {q:"x(x + 7)", a:"x² + 7x"},
+    {q:"4n(n + 3)", a:"4n² + 12n"}
+  ],
+  n2: [
+    {q:"-3a(2a - 1)", a:"-6a² + 3a"},
+    {q:"-x(3x - 4)", a:"-3x² + 4x"},
+    {q:"3x(x² - 2x + 1)", a:"3x³ - 6x² + 3x"},
+    {q:"-2m(m + 6)", a:"-2m² - 12m"},
+    {q:"2xy(3x - y)", a:"6x²y - 2xy²"},
+    {q:"-4b(b - 3)", a:"-4b² + 12b"},
+    {q:"2a(a² - 3a + 2)", a:"2a³ - 6a² + 4a"},
+    {q:"-5x(2x - 3)", a:"-10x² + 15x"}
+  ],
+  hard: [
+    {q:"-3x(x³ - 2x² + x - 5)", a:"-3x⁴ + 6x³ - 3x² + 15x"},
+    {q:"-2a²(a² - 3a + 4)", a:"-2a⁴ + 6a³ - 8a²"},
+    {q:"-2y²(y² - 3y + 2)", a:"-2y⁴ + 6y³ - 4y²"},
+    {q:"-2xy(3x - y + 4)", a:"-6x²y + 2xy² - 8xy"},
+    {q:"-3m²(2m² - m + 5)", a:"-6m⁴ + 3m³ - 15m²"},
+    {q:"5x²y(2x - 3y + 1)", a:"10x³y - 15x²y² + 5x²y"},
+    {q:"-x²(x³ - 2x + 3)", a:"-x⁵ + 2x³ - 3x²"},
+    {q:"-4a(a³ - 2a² + a - 6)", a:"-4a⁴ + 8a³ - 4a² + 24a"}
+  ]
+};
+
+var pools = {}; // barajas restantes por nivel, para no repetir hasta agotar el banco
+function refillPool(kind){
+  var arr = QUESTION_BANK[kind].slice();
+  for (var i = arr.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+  pools[kind] = arr;
+}
+function drawQuestion(kind){
+  if (!pools[kind] || pools[kind].length === 0) refillPool(kind);
+  return pools[kind].pop();
+}
+
+/* =========================================================================
+   14. ESTADO DEL JUEGO — en memoria (sin backend). localStorage es solo
+   una conveniencia opcional para recordar la última partida del profesor.
+   ========================================================================= */
+let state = {
+  teams: [
+    { name: TEAM_NAMES[0], color: TEAM_COLORS[0], pos: 0, skip:false },
+    { name: TEAM_NAMES[1], color: TEAM_COLORS[1], pos: 0, skip:false },
+    { name: TEAM_NAMES[2], color: TEAM_COLORS[2], pos: 0, skip:false },
+    { name: TEAM_NAMES[3], color: TEAM_COLORS[3], pos: 0, skip:false },
+  ],
+  activeTeam: 0,
+  direction: 1,     // 1 = avanzar, -1 = retroceder
+  activeCellId: null,
+  pendingMove: null, // { teamIdx, targetIndex, kind } mientras hay una pregunta abierta
+};
+
+try {
+  const saved = localStorage.getItem("senda-arcana-estado");
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    parsed.pendingMove = null; // nunca reanudar con una pregunta a medias
+    state = parsed;
+  }
+} catch (e) { /* almacenamiento no disponible: se continúa sin memoria */ }
+
+function guardarEstado(){
+  try {
+    const toSave = Object.assign({}, state, { pendingMove: null });
+    localStorage.setItem("senda-arcana-estado", JSON.stringify(toSave));
+  }
+  catch (e) { /* modo privado u otro bloqueo: no es crítico, se ignora */ }
+}
+
+/* =========================================================================
+   15. CONSTRUCCIÓN DEL TABLERO SVG — camino + casillas + íconos.
+   ========================================================================= */
+function shapeForKind(kind){
+  if (kind === "card") return "hex";
+  if (["trampa","retroceder","perderturno","portal","avanzar"].includes(kind)) return "diamond";
+  return "circle";
+}
+
+function cellPolygonPoints(shape, x, y, r){
+  if (shape === "diamond"){
+    return `${x},${y-r} ${x+r},${y} ${x},${y+r} ${x-r},${y}`;
+  }
+  if (shape === "hex"){
+    const pts = [];
+    for (let i=0;i<6;i++){
+      const a = Math.PI/180 * (60*i - 90);
+      pts.push(`${x+r*Math.cos(a)},${y+r*Math.sin(a)}`);
+    }
+    return pts.join(" ");
+  }
+  return null;
+}
+
+function buildBoardSVG(){
+  const pathD = "M " + CELLS.map(c => `${c.x},${c.y}`).join(" L ");
+  let cellsSVG = "";
+
+  CELLS.forEach((cell, i) => {
+    const info = KINDS[cell.kind];
+    const shape = (cell.kind==="start"||cell.kind==="finish") ? "big" : shapeForKind(cell.kind);
+    const r = shape === "big" ? 60 : 58;
+    let shapeSVG = "";
+
+    if (shape === "circle"){
+      shapeSVG = `<circle class="cell-shape" cx="${cell.x}" cy="${cell.y}" r="${r}" fill="${info.bg}" stroke="${info.color}" stroke-width="6"/>
+                   <circle class="cell-ring" cx="${cell.x}" cy="${cell.y}" r="${r+8}" fill="none" stroke="var(--gold-light)" stroke-width="3" stroke-dasharray="6 5"/>`;
+    } else if (shape === "big"){
+      shapeSVG = `<rect class="cell-shape" x="${cell.x-r}" y="${cell.y-r}" width="${r*2}" height="${r*2}" rx="16" fill="${info.bg}" stroke="${info.color}" stroke-width="7"/>
+                  <rect class="cell-ring" x="${cell.x-r-9}" y="${cell.y-r-9}" width="${r*2+18}" height="${r*2+18}" rx="20" fill="none" stroke="var(--gold-light)" stroke-width="3" stroke-dasharray="6 5"/>`;
+    } else {
+      const pts = cellPolygonPoints(shape, cell.x, cell.y, r);
+      shapeSVG = `<polygon class="cell-shape" points="${pts}" fill="${info.bg}" stroke="${info.color}" stroke-width="6" stroke-linejoin="round"/>
+                  <polygon class="cell-ring" points="${cellPolygonPoints(shape, cell.x, cell.y, r+9)}" fill="none" stroke="var(--gold-light)" stroke-width="3" stroke-dasharray="6 5" stroke-linejoin="round"/>`;
+    }
+
+    const iconSize = shape === "big" ? 48 : 40;
+
+    cellsSVG += `
+      <g class="cell" data-id="${cell.id}" tabindex="0" role="button" aria-label="Casilla ${cell.id}: ${info.label}">
+        ${shapeSVG}
+        <svg class="cell-icon" x="${cell.x - iconSize/2}" y="${cell.y - iconSize/2 - 6}" width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="none" color="${info.color}">
+          <use href="#${info.icon}"/>
+        </svg>
+        <text class="cell-num" x="${cell.x}" y="${cell.y + r - 6}" text-anchor="middle">${cell.id}</text>
+      </g>`;
+  });
+
+  return `
+    <svg viewBox="0 0 1280 1000" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <path d="${pathD}" fill="none" stroke="#8a6a3f" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+      <path d="${pathD}" fill="none" stroke="#6b4a26" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 26" opacity="0.7"/>
+      ${cellsSVG}
+    </svg>`;
+}
+
+/* =========================================================================
+   16. RENDER — pinta tablero, fichas, panel de equipos y casilla activa.
+   ========================================================================= */
+const boardSurface = document.getElementById("board-surface");
+const cardToastEl = document.getElementById("card-toast");
+
+function render(){
+  if (!boardSurface.querySelector("svg.board-svg-root")){
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = buildBoardSVG();
+    const svg = wrapper.firstElementChild;
+    svg.classList.add("board-svg-root");
+    boardSurface.insertBefore(svg, cardToastEl);
+    svg.querySelectorAll(".cell").forEach(g => {
+      g.addEventListener("click", () => onCellClick(parseInt(g.dataset.id, 10)));
+      g.addEventListener("keydown", (e) => { if (e.key==="Enter"||e.key===" ") { e.preventDefault(); onCellClick(parseInt(g.dataset.id,10)); } });
+    });
+  }
+  boardSurface.querySelectorAll(".cell").forEach(g => {
+    g.classList.toggle("active", parseInt(g.dataset.id,10) === state.activeCellId);
+  });
+
+  renderTokens();
+  renderTeamsPanel();
+  renderActiveCell();
+  renderLegend();
+  guardarEstado();
+}
+
+function renderTokens(){
+  boardSurface.querySelectorAll(".token").forEach(t => t.remove());
+  state.teams.forEach((team, idx) => {
+    const cell = CELLS[team.pos];
+    const el = document.createElement("div");
+    el.className = "token" + (team.skip ? " skip-flag" : "");
+    el.style.left = (cell.x / 1280 * 100) + "%";
+    el.style.top  = (cell.y / 1000 * 100) + "%";
+    el.style.background = `radial-gradient(circle at 35% 30%, ${team.color}, ${team.color}cc 70%, #00000060)`;
+    const sameCell = state.teams.filter(t => t.pos === team.pos);
+    const order = sameCell.indexOf(team);
+    if (sameCell.length > 1){
+      const spread = (order - (sameCell.length-1)/2) * 8;
+      el.style.marginLeft = spread + "px";
+    }
+    el.textContent = (idx+1).toString();
+    boardSurface.appendChild(el);
+  });
+}
+
+const teamsListEl = document.getElementById("teams-list");
+const turnNameEl = document.getElementById("turn-name");
+const turnDotEl = document.getElementById("turn-dot");
+
+function renderTeamsPanel(){
+  teamsListEl.innerHTML = "";
+  state.teams.forEach((team, idx) => {
+    const row = document.createElement("div");
+    row.className = "team-row" + (idx === state.activeTeam ? " active" : "");
+    row.innerHTML = `
+      <div class="team-dot" style="background:${team.color}"></div>
+      <input type="text" value="${team.name.replace(/"/g,'&quot;')}" data-idx="${idx}" aria-label="Nombre del equipo ${idx+1}">
+      <span class="team-pos">Casilla ${CELLS[team.pos].id}</span>
+      <button class="team-skip-btn ${team.skip ? "on":""}" data-idx="${idx}" title="Marcar/quitar pierde turno">⏳</button>
+      <button class="team-remove-btn" data-idx="${idx}" title="Quitar equipo">✕</button>
+    `;
+    row.querySelector(".team-dot").addEventListener("click", () => { state.activeTeam = idx; render(); });
+    row.querySelector("input").addEventListener("click", (e) => e.stopPropagation());
+    row.querySelector("input").addEventListener("input", (e) => { state.teams[idx].name = e.target.value; guardarEstado(); updateTurnBanner(); });
+    row.querySelector(".team-skip-btn").addEventListener("click", (e) => { e.stopPropagation(); state.teams[idx].skip = !state.teams[idx].skip; render(); });
+    row.querySelector(".team-remove-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (state.teams.length <= 2) return;
+      state.teams.splice(idx,1);
+      if (state.activeTeam >= state.teams.length) state.activeTeam = 0;
+      render();
+    });
+    row.addEventListener("click", () => { state.activeTeam = idx; render(); });
+    teamsListEl.appendChild(row);
+  });
+  updateTurnBanner();
+
+  document.getElementById("btn-add-team").disabled = state.teams.length >= 6;
+}
+
+function updateTurnBanner(){
+  const team = state.teams[state.activeTeam];
+  if (!team) return;
+  turnNameEl.textContent = team.name;
+  turnDotEl.style.background = team.color;
+}
+
+function renderActiveCell(){
+  const body = document.getElementById("active-cell-body");
+  if (state.activeCellId == null){
+    body.innerHTML = `<p class="active-empty">Toca una casilla del tablero para ver su tipo, nivel y descripción.</p>`;
+    return;
+  }
+  const cell = CELLS.find(c => c.id === state.activeCellId);
+  const info = KINDS[cell.kind];
+  body.innerHTML = `
+    <div class="active-cell-head">
+      <div class="active-cell-icon" style="background:${info.bg}; border-color:${info.color}">
+        <svg viewBox="0 0 24 24" fill="none" color="${info.color}"><use href="#${info.icon}"/></svg>
+      </div>
+      <div>
+        <div class="active-cell-title">Casilla ${cell.id} · ${info.label}</div>
+        ${info.tag ? `<span class="active-cell-tag" style="background:${info.color}33; color:${info.color === "var(--l1)" ? "var(--l1-ink)" : info.color}">${info.tag}</span>` : ""}
+      </div>
+    </div>
+    <p class="active-cell-desc">${info.desc}</p>
+  `;
+}
+
+function renderLegend(){
+  const grid = document.getElementById("legend-grid");
+  if (grid.dataset.built) return;
+  grid.dataset.built = "1";
+  const order = ["n1","n2","hard","card","trampa","retroceder","perderturno","portal","avanzar"];
+  grid.innerHTML = order.map(k => {
+    const info = KINDS[k];
+    return `<div class="legend-item">
+      <div class="legend-swatch" style="background:${info.bg}; border-color:${info.color}">
+        <svg viewBox="0 0 24 24" fill="none" color="${info.color}"><use href="#${info.icon}"/></svg>
+      </div>
+      ${info.label}
+    </div>`;
+  }).join("");
+}
+
+/* =========================================================================
+   17. INTERACCIÓN — clic en casilla (teletransporte), mover con dado,
+   preguntas de álgebra al caer en Nivel 1/2/Difícil, turnos y ganador.
+   ========================================================================= */
+function overlayAbierto(){
+  return !document.getElementById("overlay-question").hidden || !document.getElementById("overlay-winner").hidden;
+}
+
+// Clic directo en una casilla: teletransporte manual sin pregunta (para
+// portales o correcciones del profesor), tal como en el tablero original.
+function onCellClick(cellId){
+  if (overlayAbierto()) return;
+  state.activeCellId = cellId;
+  const cell = CELLS.find(c => c.id === cellId);
+  const idx = CELLS.findIndex(c => c.id === cellId);
+  state.teams[state.activeTeam].pos = idx;
+
+  if (cell.kind === "card") mostrarDestelloCarta();
+  render();
+  if (idx === LAST_INDEX) mostrarGanador(state.teams[state.activeTeam]);
+}
+
+function mostrarDestelloCarta(){
+  cardToastEl.classList.remove("show");
+  void cardToastEl.offsetWidth;
+  cardToastEl.classList.add("show");
+}
+
+// Movimiento con el dado físico: si la casilla de destino es Nivel 1/2/
+// Difícil, se abre la pregunta antes de mover; cualquier otra casilla
+// mueve de inmediato como en el tablero original.
+function moverEquipoActivo(pasos){
+  if (overlayAbierto()) return;
+  const team = state.teams[state.activeTeam];
+  let target = team.pos + pasos * state.direction;
+  target = Math.max(0, Math.min(LAST_INDEX, target));
+  intentarMoverA(state.activeTeam, target);
+}
+
+function intentarMoverA(teamIdx, targetIndex){
+  const destino = CELLS[targetIndex];
+  if (QUESTION_BANK[destino.kind]){
+    abrirPregunta(teamIdx, targetIndex, destino.kind);
+  } else {
+    confirmarMovimiento(teamIdx, targetIndex);
+  }
+}
+
+function confirmarMovimiento(teamIdx, targetIndex){
+  const team = state.teams[teamIdx];
+  team.pos = targetIndex;
+  state.activeCellId = CELLS[targetIndex].id;
+  if (CELLS[targetIndex].kind === "card") mostrarDestelloCarta();
+  render();
+  if (targetIndex === LAST_INDEX) mostrarGanador(team);
+}
+
+function abrirPregunta(teamIdx, targetIndex, kind){
+  const item = drawQuestion(kind);
+  state.pendingMove = { teamIdx, targetIndex, kind };
+  const info = KINDS[kind];
+  const kickerEl = document.getElementById("q-kicker");
+  kickerEl.textContent = info.label + " · " + state.teams[teamIdx].name;
+  kickerEl.className = "kicker " + kind;
+  document.getElementById("q-expr").textContent = item.q;
+  document.getElementById("q-answer").textContent = item.a;
+  document.getElementById("q-answer-block").hidden = true;
+  document.getElementById("q-row-reveal").hidden = false;
+  document.getElementById("q-row-judge").hidden = true;
+  document.getElementById("overlay-question").hidden = false;
+}
+
+document.getElementById("btn-reveal").addEventListener("click", function(){
+  document.getElementById("q-answer-block").hidden = false;
+  document.getElementById("q-row-reveal").hidden = true;
+  document.getElementById("q-row-judge").hidden = false;
+});
+
+function cerrarPregunta(){
+  document.getElementById("overlay-question").hidden = true;
+}
+
+document.getElementById("btn-correct").addEventListener("click", function(){
+  const move = state.pendingMove;
+  cerrarPregunta();
+  state.pendingMove = null;
+  if (move) confirmarMovimiento(move.teamIdx, move.targetIndex);
+});
+
+document.getElementById("btn-wrong").addEventListener("click", function(){
+  cerrarPregunta();
+  state.pendingMove = null;
+  render(); // el equipo se queda donde estaba; no hay cambio de posición
+});
+
+function mostrarGanador(team){
+  document.getElementById("winner-name").textContent = team.name;
+  document.getElementById("overlay-winner").hidden = false;
+}
+document.getElementById("btn-close-winner").addEventListener("click", function(){
+  document.getElementById("overlay-winner").hidden = true;
+});
+
+document.getElementById("dice-grid").innerHTML =
+  [1,2,3,4,5,6].map(n => `<button class="rune-btn small" data-n="${n}">${n}</button>`).join("");
+document.getElementById("dice-grid").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-n]");
+  if (btn) moverEquipoActivo(parseInt(btn.dataset.n,10));
+});
+
+document.getElementById("btn-dir-avanzar").addEventListener("click", () => setDirection(1));
+document.getElementById("btn-dir-retroceder").addEventListener("click", () => setDirection(-1));
+function setDirection(dir){
+  state.direction = dir;
+  document.getElementById("btn-dir-avanzar").classList.toggle("active", dir===1);
+  document.getElementById("btn-dir-retroceder").classList.toggle("active", dir===-1);
+}
+
+document.getElementById("btn-next-turn").addEventListener("click", () => {
+  if (overlayAbierto()) return;
+  const n = state.teams.length;
+  for (let step=1; step<=n; step++){
+    const next = (state.activeTeam + step) % n;
+    if (state.teams[next].skip){
+      state.teams[next].skip = false;
+      continue;
+    }
+    state.activeTeam = next;
+    break;
+  }
+  render();
+});
+
+document.getElementById("btn-add-team").addEventListener("click", () => {
+  if (state.teams.length >= 6) return;
+  const n = state.teams.length;
+  state.teams.push({ name: TEAM_NAMES[n % TEAM_NAMES.length], color: TEAM_COLORS[n % TEAM_COLORS.length], pos:0, skip:false });
+  render();
+});
+
+document.getElementById("btn-reset").addEventListener("click", () => {
+  state.teams.forEach(t => { t.pos = 0; t.skip = false; });
+  state.activeTeam = 0;
+  state.activeCellId = null;
+  state.pendingMove = null;
+  document.getElementById("overlay-question").hidden = true;
+  document.getElementById("overlay-winner").hidden = true;
+  pools = {};
+  render();
+});
+
+document.getElementById("btn-fullscreen").addEventListener("click", () => {
+  const el = document.documentElement;
+  if (!document.fullscreenElement){
+    (el.requestFullscreen?.() || Promise.reject()).catch(() => {});
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+
+/* =========================================================================
+   18. ARRANQUE
+   ========================================================================= */
+render();
+</script>
+
+</body></html>
