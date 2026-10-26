@@ -426,7 +426,7 @@ button.rune-btn:disabled{ opacity:.4; cursor:not-allowed; }
       <svg class="title-emblem" viewBox="0 0 24 24" fill="none"><use href="#icon-castle"/></svg>
       <div class="title-text">
         <h1>Senda Arcana</h1>
-        <p>Tablero de misiones — multiplicación de monomio × polinomio</p>
+        <p>Tablero de misiones — multiplicación de monomio × polinomio y polinomio × polinomio</p>
       </div>
     </div>
     <div class="header-actions">
@@ -515,6 +515,19 @@ button.rune-btn:disabled{ opacity:.4; cursor:not-allowed; }
   </div>
 </div>
 
+<!-- ══ MODAL: CARTA DE EVENTO ══ -->
+<div class="overlay" id="overlay-card" hidden>
+  <div class="modal winner-modal">
+    <svg viewBox="0 0 24 24" fill="none" color="var(--card-gold)" style="width:56px;height:56px"><use href="#icon-chest-open"/></svg>
+    <div class="kicker" id="card-kicker" style="color:var(--card-gold)">Cofre del tesoro</div>
+    <div class="expr" id="card-title">Viento a favor</div>
+    <p class="active-cell-desc" id="card-desc" style="font-size:20px">Avanza 2 casillas.</p>
+    <div class="row">
+      <button class="rune-btn primary" id="btn-card-apply" style="flex:1">Aplicar carta</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ MODAL: GANADOR ══ -->
 <div class="overlay" id="overlay-winner" hidden>
   <div class="modal winner-modal">
@@ -572,9 +585,9 @@ const KINDS = {
   n2:     { label:"Nivel 2 · Intermedio", tag:"NIVEL 2", icon:"icon-flame", color:"var(--l2)", bg:"var(--l2-bg)", ink:"var(--l2-ink)",
             desc:"Pregunta de nivel 2: monomio por un polinomio más largo. Respuesta correcta → avanza; incorrecta → se queda." },
   hard:   { label:"Casilla difícil", tag:"DIFÍCIL", icon:"icon-swords", color:"var(--hard)", bg:"var(--hard-bg)", ink:"var(--hard-ink)",
-            desc:"Pregunta difícil: signos, exponentes y varios términos. Respuesta correcta → avanza; incorrecta → se queda." },
+            desc:"Pregunta difícil: monomio por un polinomio largo o polinomio por polinomio. Respuesta correcta → avanza; incorrecta → se queda." },
   card:   { label:"Cofre del tesoro", tag:"CARTA", icon:"icon-chest", color:"var(--card-gold)", bg:"var(--card-bg)",
-            desc:"¡Roba una carta! El equipo toma una carta física de eventos y sigue sus instrucciones." },
+            desc:"¡Roba una carta! Aparece una carta de eventos al azar y se aplica su efecto." },
   trampa:      { label:"Trampa arcana", tag:"EVENTO", icon:"icon-spikes", color:"var(--trampa)", bg:"var(--trampa-bg)",
                  desc:"Una losa oculta se activa bajo los pies del equipo. Sugerencia narrativa: retrocede algunas casillas." },
   retroceder:  { label:"Viento en contra", tag:"EVENTO", icon:"icon-arrow-left", color:"var(--retroceder)", bg:"var(--retroceder-bg)",
@@ -646,29 +659,50 @@ const QUESTION_BANK = {
   ],
   hard: [
     {q:"-3x(x³ - 2x² + x - 5)", a:"-3x⁴ + 6x³ - 3x² + 15x"},
-    {q:"-2a²(a² - 3a + 4)", a:"-2a⁴ + 6a³ - 8a²"},
-    {q:"-2y²(y² - 3y + 2)", a:"-2y⁴ + 6y³ - 4y²"},
     {q:"-2xy(3x - y + 4)", a:"-6x²y + 2xy² - 8xy"},
-    {q:"-3m²(2m² - m + 5)", a:"-6m⁴ + 3m³ - 15m²"},
     {q:"5x²y(2x - 3y + 1)", a:"10x³y - 15x²y² + 5x²y"},
-    {q:"-x²(x³ - 2x + 3)", a:"-x⁵ + 2x³ - 3x²"},
-    {q:"-4a(a³ - 2a² + a - 6)", a:"-4a⁴ + 8a³ - 4a² + 24a"}
+    {q:"-4a(a³ - 2a² + a - 6)", a:"-4a⁴ + 8a³ - 4a² + 24a"},
+    {q:"(x + 2)(x - 5)", a:"x² - 3x - 10"},
+    {q:"(x - 4)(x - 3)", a:"x² - 7x + 12"},
+    {q:"(3m + 2)(m - 1)", a:"3m² - m - 2"},
+    {q:"(2y - 3)(y + 4)", a:"2y² + 5y - 12"},
+    {q:"(a + 3)(2a - 5)", a:"2a² + a - 15"},
+    {q:"(x + 2y)(x - y)", a:"x² + xy - 2y²"},
+    {q:"(2a + 1)(a² - a + 3)", a:"2a³ - a² + 5a + 3"},
+    {q:"(x - 1)(x² + 2x - 3)", a:"x³ + x² - 5x + 3"}
   ]
 };
 
-var pools = {}; // barajas restantes por nivel, para no repetir hasta agotar el banco
-function refillPool(kind){
-  var arr = QUESTION_BANK[kind].slice();
+/* Cartas de eventos (casillas "Cofre del tesoro"): move = casillas a
+   avanzar (+) o retroceder (−); skip = pierde el próximo turno;
+   challenge = abre un reto de ese nivel y, si acierta, avanza "move". */
+const EVENT_CARDS = [
+  {t:"Viento a favor",     d:"Una brisa mágica los impulsa. Avancen 2 casillas.", move:2},
+  {t:"Atajo del bosque",   d:"Encontraron un sendero escondido. Avancen 1 casilla.", move:1},
+  {t:"Alas de grifo",      d:"Un grifo los lleva por los aires. Avancen 3 casillas.", move:3},
+  {t:"Puente roto",        d:"El puente cede bajo sus pies. Retrocedan 1 casilla.", move:-1},
+  {t:"Pergamino perdido",  d:"Olvidaron el mapa y regresan por él. Retrocedan 2 casillas.", move:-2},
+  {t:"Hechizo de sueño",   d:"Un hada los adormece. Pierden el próximo turno.", skip:true},
+  {t:"Dado encantado",     d:"¡La suerte les sonríe! Vuelvan a lanzar el dado.", move:0},
+  {t:"Reto del sabio",     d:"El sabio del bosque les propone un reto difícil. Si lo resuelven bien, avanzan 3 casillas.", challenge:"hard", move:3},
+  {t:"Prueba del aprendiz",d:"Un aprendiz de mago los desafía con un reto de nivel 1. Si lo resuelven bien, avanzan 2 casillas.", challenge:"n1", move:2},
+  {t:"Escudo de runas",    d:"Las runas los protegen: esta vez no ocurre nada. ¡Sigan su camino!", move:0}
+];
+
+var pools = {}; // barajas restantes por nivel (y de cartas), para no repetir hasta agotar el mazo
+function refillPool(kind, src){
+  var arr = src.slice();
   for (var i = arr.length - 1; i > 0; i--){
     var j = Math.floor(Math.random() * (i + 1));
     var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
   }
   pools[kind] = arr;
 }
-function drawQuestion(kind){
-  if (!pools[kind] || pools[kind].length === 0) refillPool(kind);
+function drawFrom(kind, src){
+  if (!pools[kind] || pools[kind].length === 0) refillPool(kind, src);
   return pools[kind].pop();
 }
+function drawQuestion(kind){ return drawFrom(kind, QUESTION_BANK[kind]); }
 
 /* =========================================================================
    14. ESTADO DEL JUEGO — en memoria (sin backend). localStorage es solo
@@ -904,7 +938,8 @@ function renderLegend(){
    preguntas de álgebra al caer en Nivel 1/2/Difícil, turnos y ganador.
    ========================================================================= */
 function overlayAbierto(){
-  return !document.getElementById("overlay-question").hidden || !document.getElementById("overlay-winner").hidden;
+  return !document.getElementById("overlay-question").hidden || !document.getElementById("overlay-winner").hidden
+      || !document.getElementById("overlay-card").hidden;
 }
 
 // Clic directo en una casilla: teletransporte manual sin pregunta (para
@@ -947,18 +982,44 @@ function intentarMoverA(teamIdx, targetIndex){
   }
 }
 
-function confirmarMovimiento(teamIdx, targetIndex){
+// desdeCarta evita encadenar cartas cuando el efecto de una carta deja al
+// equipo sobre otro cofre.
+function confirmarMovimiento(teamIdx, targetIndex, desdeCarta){
   const team = state.teams[teamIdx];
   team.pos = targetIndex;
   state.activeCellId = CELLS[targetIndex].id;
-  if (CELLS[targetIndex].kind === "card") mostrarDestelloCarta();
   render();
   if (targetIndex === LAST_INDEX) mostrarGanador(team);
+  else if (CELLS[targetIndex].kind === "card" && !desdeCarta) abrirCarta(teamIdx);
 }
 
-function abrirPregunta(teamIdx, targetIndex, kind){
+let pendingCard = null; // { teamIdx, card } mientras la carta está abierta
+
+function abrirCarta(teamIdx){
+  const card = drawFrom("card", EVENT_CARDS);
+  pendingCard = { teamIdx, card };
+  document.getElementById("card-kicker").textContent = "Cofre del tesoro · " + state.teams[teamIdx].name;
+  document.getElementById("card-title").textContent = card.t;
+  document.getElementById("card-desc").textContent = card.d;
+  document.getElementById("btn-card-apply").textContent = card.challenge ? "Mostrar reto" : "Aplicar carta";
+  document.getElementById("overlay-card").hidden = false;
+}
+
+document.getElementById("btn-card-apply").addEventListener("click", function(){
+  document.getElementById("overlay-card").hidden = true;
+  if (!pendingCard) return;
+  const { teamIdx, card } = pendingCard;
+  pendingCard = null;
+  const team = state.teams[teamIdx];
+  const target = Math.max(0, Math.min(LAST_INDEX, team.pos + (card.move || 0)));
+  if (card.skip){ team.skip = true; render(); return; }
+  if (card.challenge){ abrirPregunta(teamIdx, target, card.challenge, true); return; }
+  if (target !== team.pos) confirmarMovimiento(teamIdx, target, true);
+});
+
+function abrirPregunta(teamIdx, targetIndex, kind, desdeCarta){
   const item = drawQuestion(kind);
-  state.pendingMove = { teamIdx, targetIndex, kind };
+  state.pendingMove = { teamIdx, targetIndex, kind, desdeCarta };
   const info = KINDS[kind];
   const kickerEl = document.getElementById("q-kicker");
   kickerEl.textContent = info.label + " · " + state.teams[teamIdx].name;
@@ -985,7 +1046,7 @@ document.getElementById("btn-correct").addEventListener("click", function(){
   const move = state.pendingMove;
   cerrarPregunta();
   state.pendingMove = null;
-  if (move) confirmarMovimiento(move.teamIdx, move.targetIndex);
+  if (move) confirmarMovimiento(move.teamIdx, move.targetIndex, move.desdeCarta);
 });
 
 document.getElementById("btn-wrong").addEventListener("click", function(){
@@ -1046,6 +1107,8 @@ document.getElementById("btn-reset").addEventListener("click", () => {
   state.pendingMove = null;
   document.getElementById("overlay-question").hidden = true;
   document.getElementById("overlay-winner").hidden = true;
+  document.getElementById("overlay-card").hidden = true;
+  pendingCard = null;
   pools = {};
   render();
 });
